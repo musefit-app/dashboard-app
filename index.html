@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MUSE FIT 経営ダッシュボード</title>
+  <style>
+    /* 経営層向けに、シンプルで視認性の高いモダンデザインを採用 */
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f0f2f5; color: #333; margin: 0; padding: 10px; }
+    .container { max-width: 600px; margin: 0 auto; background: transparent; padding: 0; }
+    
+    .header-card { background: #434343; color: white; padding: 15px 20px; border-radius: 12px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    h2 { margin: 0; font-size: 18px; font-weight: 700; }
+    
+    .store-select-wrap { display: flex; align-items: center; gap: 10px; }
+    select { padding: 8px 12px; border-radius: 6px; border: none; font-size: 14px; font-weight: bold; color: #333; background: #fff2cc; outline: none; }
+    
+    .card { background: #ffffff; padding: 15px; border-radius: 12px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .card-title { font-size: 15px; font-weight: bold; color: #333; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+    
+    /* 売上テーブルのデザイン */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th, .data-table td { padding: 10px 5px; text-align: right; border-bottom: 1px solid #f0f0f0; }
+    .data-table th { color: #666; font-weight: normal; background-color: #fafafa; border-top: 1px solid #eee; border-bottom: 2px solid #eee;}
+    .data-table th:first-child, .data-table td:first-child { text-align: left; font-weight: bold; color: #555; }
+    
+    .total-row td { font-weight: bold; color: #d9423e; font-size: 14px; background-color: #fff9f9; }
+    
+    /* KPIカードのデザイン */
+    .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .kpi-box { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #eee; }
+    .kpi-label { font-size: 11px; color: #666; font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
+    .kpi-value { font-size: 18px; font-weight: bold; color: #705e9e; }
+    
+    .loader { display: none; text-align: center; color: #8e7cc3; font-weight: bold; margin: 20px 0; font-size: 14px; background: #ffffff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);}
+  </style>
+</head>
+<body>
+
+<div class="container">
+  
+  <div class="header-card">
+    <h2>📊 経営ダッシュボード</h2>
+    <div class="store-select-wrap">
+      <select id="storeSelect" onchange="loadDashboardData()">
+        <option value="全社">全社</option>
+        <option value="並木">並木</option>
+        <option value="横川">横川</option>
+        <option value="CHANGE FIT">CHANGE FIT</option>
+      </select>
+    </div>
+  </div>
+
+  <div id="globalLoader" class="loader">最新のデータを集計中...</div>
+
+  <div id="dashboardContent" style="display: none;">
+    
+    <!-- 売上集計カード -->
+    <div class="card">
+      <div class="card-title">💰 1. 売上合計推移 (確定実績ベース)</div>
+      <table class="data-table" id="salesTable">
+        <thead>
+          <tr id="salesHeader">
+            <th>項目</th>
+            <!-- 月のラベルが入ります -->
+          </tr>
+        </thead>
+        <tbody>
+          <!-- 売上データが入ります -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 会員数集計カード -->
+    <div class="card">
+      <div class="card-title">👥 2. 会員数推移</div>
+      <table class="data-table" id="membersTable">
+        <thead>
+          <tr id="membersHeader">
+            <th>項目</th>
+            <!-- 月のラベルが入ります -->
+          </tr>
+        </thead>
+        <tbody>
+          <!-- 会員データが入ります -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 最新KPIカード（直近月） -->
+    <div class="card">
+      <div class="card-title">📈 3. 当月 重要KPI (推定値)</div>
+      <div class="kpi-grid">
+        <div class="kpi-box">
+          <div class="kpi-label">解約率 (月次)</div>
+          <div class="kpi-value" id="kpi-churn">- %</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-label">客単価 (ARPU)</div>
+          <div class="kpi-value" id="kpi-arpu">- 円</div>
+        </div>
+        <div class="kpi-box" style="grid-column: span 2;">
+          <div class="kpi-label">推定LTV (顧客生涯価値)</div>
+          <div class="kpi-value" id="kpi-ltv" style="color: #d9423e; font-size: 22px;">- 円</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // =========================================================================
+  // ★重要：新しく新バージョンで発行された「デプロイURL」をここに正確に貼り付けてください
+  // =========================================================================
+  var GAS_URL = "https://script.google.com/macros/s/AKfycbxADTPjdJtTLa-gR3Lmy-gsCYJ45a0t0I8tBJf-fUEYw3rhpWnlrPBZsaxg2uEYZVCf/exec";
+  // =========================================================================
+
+  window.onload = function() {
+    loadDashboardData();
+  };
+
+  function loadDashboardData() {
+    if(!GAS_URL.startsWith("http")) {
+      showLoader("⚠️ エラー：URLが設定されていません。GAS_URLを書き換えてください。");
+      return;
+    }
+
+    var targetStore = document.getElementById('storeSelect').value;
+    document.getElementById('dashboardContent').style.display = 'none';
+    showLoader("最新のデータを集計中...");
+
+    fetch(GAS_URL + "?action=getDashboard&store=" + encodeURIComponent(targetStore))
+      .then(response => response.json())
+      .then(res => {
+        hideLoader();
+        if(res.success) {
+          renderDashboard(res.data);
+          document.getElementById('dashboardContent').style.display = 'block';
+        } else {
+          alert("データ取得に失敗しました: " + res.message);
+        }
+      })
+      .catch(err => {
+        hideLoader();
+        alert("通信エラーが発生しました。");
+      });
+  }
+
+  function renderDashboard(data) {
+    // テーブルヘッダーの生成（左から古い順➔新しい時系列にするため、3,2,1,0の順にループ）
+    var headerHTML = "<th>項目</th>";
+    for(var i=3; i>=0; i--) {
+       headerHTML += "<th>" + data.months[i].replace("年", "<br>") + "</th>";
+    }
+    document.getElementById('salesHeader').innerHTML = headerHTML;
+    document.getElementById('membersHeader').innerHTML = headerHTML;
+
+    // --- 1. 売上テーブルの描画 ---
+    var salesTbody = "";
+    salesTbody += "<tr class='total-row'><td>売上合計</td>";
+    for(var i=3; i>=0; i--) { salesTbody += "<td>¥" + data.sales.total[i].toLocaleString() + "</td>"; }
+    salesTbody += "</tr>";
+    
+    // 支払方法別の描画
+    var payments = ['ストアーズ', 'トワライズ', 'PAYSYS', '会費PAY', '現金'];
+    payments.forEach(function(p) {
+      if (data.sales.payment[p]) {
+        salesTbody += "<tr><td>" + p + "</td>";
+        for(var i=3; i>=0; i--) { salesTbody += "<td>¥" + data.sales.payment[p][i].toLocaleString() + "</td>"; }
+        salesTbody += "</tr>";
+      }
+    });
+    document.querySelector('#salesTable tbody').innerHTML = salesTbody;
+
+    // --- 2. 会員テーブルの描画 ---
+    var memTbody = "";
+    memTbody += "<tr><td>入会中</td>";
+    for(var i=3; i>=0; i--) { memTbody += "<td>" + data.members.active[i] + "名</td>"; }
+    memTbody += "</tr>";
+    memTbody += "<tr><td>休会中</td>";
+    for(var i=3; i>=0; i--) { memTbody += "<td>" + data.members.pause[i] + "名</td>"; }
+    memTbody += "</tr>";
+    memTbody += "<tr><td>退会者</td>";
+    for(var i=3; i>=0; i--) { memTbody += "<td>" + data.members.quit[i] + "名</td>"; }
+    memTbody += "</tr>";
+    document.querySelector('#membersTable tbody').innerHTML = memTbody;
+
+    // --- 3. KPIの計算と描画（配列0番目＝当月のデータを使用） ---
+    var currentActive = data.members.active[0];
+    var currentQuit = data.members.quit[0];
+    var currentSales = data.sales.total[0];
+
+    var churnRate = 0;
+    var ltv = 0;
+    var arpu = 0;
+
+    var totalMembers = currentActive + currentQuit;
+
+    if (totalMembers > 0) {
+      // 監査基準に即した退会率の計算式：退会者 ÷ (入会中 ＋ 退会者)
+      churnRate = currentQuit / totalMembers;
+    }
+    
+    if (currentActive > 0) {
+      // 客単価（ARPU）の計算：当月の売上合計 ÷ 入会中メンバー数
+      arpu = currentSales / currentActive;
+      if (churnRate > 0) {
+        // 推定LTVの計算：ARPU ÷ 退会率
+        ltv = arpu / churnRate;
+      } else {
+        // ★親切機能：退会者が0名の場合は、保守的に「継続期間24ヶ月」として健康な推定LTVを算出
+        ltv = arpu * 24;
+      }
+    }
+
+    document.getElementById('kpi-churn').innerText = (churnRate * 100).toFixed(1) + " %";
+    document.getElementById('kpi-arpu').innerText = "¥" + Math.round(arpu).toLocaleString() + " 円";
+    
+    // 退会率がゼロの場合は、注記を添えて美しくシミュレーション値を表示
+    document.getElementById('kpi-ltv').innerText = churnRate > 0 ? 
+      "¥" + Math.round(ltv).toLocaleString() + " 円" : 
+      "¥" + Math.round(ltv).toLocaleString() + " 円 (退会者0名想定)";
+  }
+
+  function showLoader(text) {
+    var l = document.getElementById('globalLoader');
+    l.innerHTML = text;
+    l.style.display = 'block';
+  }
+  function hideLoader() {
+    document.getElementById('globalLoader').style.display = 'none';
+  }
+</script>
+</body>
+</html>
